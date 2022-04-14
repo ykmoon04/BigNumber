@@ -2,17 +2,20 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Numerics;
+using System;
+using System.Linq;
 
 // To control infinite Integer
 // Only positibe number
 
 public class BigNumber
 {
-    private static string[] placeValue = new string[] { "", "¸¸","¾ï", "Á¶", "°æ", "ÇØ", "ÀÚ", "¾ç", "°¡", "±¸", "°£" };
+    private static string[] placeValue = new string[] { "", "ë§Œ","ì–µ", "ì¡°", "ê²½", "í•´", "ì", "ì–‘", "ê°€", "êµ¬", "ê°„" };
     private static int MAX = placeValue.Length;
+    private static int TENTHOUSAND = 10000;
 
     private int[] value = new int[MAX];
-    private float fractionPart; // ¼Ò¼öÁ¡ ¾Æ·¡ ÆÄÆ® 
+    private float fractionPart; // ì†Œìˆ˜ì  ì•„ë˜ íŒŒíŠ¸ 
 
     public static BigNumber Zero = new BigNumber(0);
     // =================================================================================================    
@@ -21,26 +24,26 @@ public class BigNumber
 
     public BigNumber(BigInteger num)
     {
-        setValue(num);
+        SetValue(num);
     }
 
     public BigNumber(int num)
     {
-        setValue(num);
+        SetValue(num);
     }
 
     public BigNumber(float num)
     {
-        setValue((int)num);
+        SetValue(num);
     }
 
     public BigNumber(string num){
-        setValue(num);
+        SetValue(num);
     }
 
     public BigNumber(double num)
     {
-        setValue((int)num);
+        SetValue((int)num);
     }
 
     // copy constructor
@@ -55,8 +58,21 @@ public class BigNumber
 
     // =================================================================================================
     // Getter Setter
-    public void setValue(BigInteger num)
+
+    public void Init(){
+        for(int i=0;i<MAX;i++){
+            value[i]=0;
+        }
+        fractionPart = 0f;
+    }
+    public void SetValue(BigInteger num)
     {
+        Init();
+        if(num.ToString().Length > MAX*4) {
+            SetMaxValue();
+            return;
+        }
+
         string str = num.ToString();
         int idx = 0;
 
@@ -75,17 +91,34 @@ public class BigNumber
     }
 
     
-    public void setValue(int num)
+    public void SetValue(int num)
     {
+        Init();
         int idx =0 ;
         while(num>0){
-            value[idx++] = num % 10000;
-            num /= 10000;
+            value[idx++] = num % TENTHOUSAND;
+            num /= TENTHOUSAND;
         }
     }
 
-    public void setValue(string str)
+    public void SetValue(string str)
     {
+        Init();
+        
+        string fraction = "";
+        if(str.Contains(".")){
+            fraction = str.Substring(str.IndexOf('.'));
+            string frPart = CustomMath.getSignificantDigits(float.Parse("0" + fraction));
+
+            this.fractionPart = float.Parse("0" + fraction);
+            str = str.Substring(0, str.IndexOf('.'));
+        }
+
+        if(str.Length > MAX*4) {
+            SetMaxValue();
+            return;
+        }
+        
         int idx = 0;
 
         while (!str.Equals(""))
@@ -102,46 +135,44 @@ public class BigNumber
         }
     }
 
-    public void setValue(BigNumber num)
+    public void SetValue(BigNumber num)
     {
+        Init();
         for(int i=0;i<MAX;i++){
             this.value[i] = num.value[i];
         }
     }
 
-    // float ¹Ş¾Æ¼­ ¼¼ÆÃ
-    // ¼Ò¼öÁ¡ ¾Æ·¡ Á¤È®ÇÏÁö ¾ÊÀ½
-    // ¼öÁ¤ ÇÊ¿ä
-    /*
-    public void setValue(float num)
+
+    public void SetValue(float num)
     {
-        string strNum = num.ToString();
-        int decimalPoint = strNum.IndexOf('.');
+        string numToStr = CustomMath.getSignificantDigits(num);
+        int fractionCnt = CustomMath.getNumOfSignificantDigits(num);
 
-        string intPart = strNum.Substring(0,decimalPoint);
-        string decimalPlacesPart ="";
-        if(strNum.Contains(".")) decimalPlacesPart = strNum.Substring(decimalPoint+1);
+        
+        this.fractionPart = float.Parse("0." + numToStr.Substring(numToStr.Length - fractionCnt));
+        numToStr = numToStr.Substring(0,numToStr.Length - fractionCnt);
 
+        if(numToStr.Length > MAX*4) {
+            SetMaxValue();
+            return;
+        }
+        
         int idx = 0;
-
-        while (!intPart.Equals(""))
+        while (!numToStr.Equals(""))
         {
-            int startIdx = intPart.Length - 4;
+            int startIdx = numToStr.Length - 4;
             if (startIdx < 0)
             {
                 startIdx = 0;
             }
 
-            string unit = intPart.Substring(startIdx);
+            string unit = numToStr.Substring(startIdx);
             value[idx++] = int.Parse(unit);
-            intPart = intPart.Substring(0, intPart.Length - unit.Length);
-        }
-
-        if(!decimalPlacesPart.Equals("")){
-            this.fractionPart = int.Parse(decimalPlacesPart);
+            numToStr = numToStr.Substring(0, numToStr.Length - unit.Length);
         }
     }
-    */
+    
 
     public void SetMaxValue(){
         for(int i=0;i<MAX;i++){
@@ -150,18 +181,13 @@ public class BigNumber
         return;
     }
 
-    // ´ÜÀ§¿Í ÇÔ²² Ãâ·Â
-    public string getValueWithText()
+    // ë‹¨ìœ„ì™€ í•¨ê»˜ ì¶œë ¥ - í° ë‹¨ìœ„ ê°’ 2ê°œ
+    public string GetValueWithText()
     {
-        if(isZero()) return "0";
+        if(IsZero()) return "0";
 
         string res = "";
-        int startIdx = MAX - 1;
-
-        while (startIdx > 0 && value[startIdx] == 0)
-        {
-            startIdx--;
-        }
+        int startIdx = getLengthOfValue();
 
         for (int i = startIdx; i >= 0 && i > startIdx - 2; i--)
         {
@@ -175,56 +201,72 @@ public class BigNumber
         return res;
     }
 
-    // Á¤¼ö ÇüÅÂ·Î ¹İÈ¯
-    public BigInteger ToBigInteger()
+    // ë‹¨ìœ„ì™€ í•¨ê»˜ ì¶œë ¥ - ì „ë¶€ (í…ŒìŠ¤íŠ¸ìš©)
+    public string GetFullValueWithText()
     {
-        if(isZero()) return 0;
+        if(IsZero()) return "0";
 
         string res = "";
-        int startIdx = MAX - 1;
+        int startIdx = getLengthOfValue();
 
-        while (startIdx > 0 && value[startIdx] == 0)
+        for (int i = startIdx; i >= 0 && i >= 0 ; i--)
         {
-            startIdx--;
+            /*
+            if (value[i] == 0) {
+                continue;
+            }
+            */
+            res += value[i] + placeValue[i];
         }
+
+        return res;
+    }
+
+    // ì •ìˆ˜ í˜•íƒœë¡œ ë°˜í™˜
+    public BigInteger ToBigInteger()
+    {
+        if(IsZero()) return 0;
+
+        string res = "";
+        int startIdx = getLengthOfValue();
 
         for (int i = startIdx; i >= 0; i--)
         {
-            if (value[i] == 0) {
-                res += "0000";
-            }
-            else{
-                res += value[i];
-            }
+            //if(res.Equals("") && i==0){
+            //    res += "0";
+            //}
+            //else
+            {
+                res += value[i].ToString("D4");
+            }  
         }
         return BigInteger.Parse(res);
     }
 
-    // ¹®ÀÚ¿­ ÇüÅÂ·Î ¹İÈ¯
+    // ë¬¸ìì—´ í˜•íƒœë¡œ ë°˜í™˜
     public override string ToString()
     {
-        if(isZero()) return "0";
+        if(IsZero()) return "0";
 
         string res = "";
-        int startIdx = MAX - 1;
 
-        while (startIdx > 0 && value[startIdx] == 0)
-        {
-            startIdx--;
+        res = string.Join("", value.Reverse().Select(x=>x.ToString("D4")).ToArray());
+        res = res.TrimStart('0');
+        if(res.Equals("")) res = "0";
+
+        if(fractionPart > 0f){
+            res += '.' + CustomMath.getSignificantDigits(fractionPart);
         }
 
-        for (int i = startIdx; i >= 0; i--)
-        {
-            if (value[i] == 0) {
-                res += "0000";
-            }
-            else{
-                res += value[i];
-            }
-        }
+        return res;
+    }
 
-        if(fractionPart > 0){
-            res += '.' + fractionPart.ToString();
+    public int getLengthOfValue(){
+        int res = MAX - 1;
+
+        while (res > 0 && value[res] == 0)
+        {
+            res--;
         }
 
         return res;
@@ -234,7 +276,7 @@ public class BigNumber
 
     // =================================================================================================
     // Status operations
-    public bool isZero()
+    public bool IsZero()
     {
         foreach(int n in value)
         {
@@ -243,6 +285,8 @@ public class BigNumber
                 return false;
             }
         }
+
+        if(fractionPart > 0f) return false;
 
         return true;
     }
@@ -271,21 +315,50 @@ public class BigNumber
             }
     }
 
-    // µÎ ¼ö ºñ±³ ÇÔ¼ö 
-    private int greaterThan(BigNumber other)
+    // ë‘ ìˆ˜ ë¹„êµ í•¨ìˆ˜ 
+    // ë‘ ìˆ˜ ê°™ìœ¼ë©´ 0
+    // thisê°€ otherë³´ë‹¤ í¬ë©´ 1
+    // thisê°€ otherë³´ë‹¤ ì‘ìœ¼ë©´ -1
+    private int GreaterThan(BigNumber other)
     {
-        // µÎ ¼ö °°À¸¸é 0
-        // this°¡ otherº¸´Ù Å©¸é 1
-        // this°¡ otherº¸´Ù ÀÛÀ¸¸é -1
-        for(int i=0; i<MAX;i++){
+        for(int i=MAX-1; i>=0;i--){
             if(this.value[i] > other.value[i]) return 1;
             else if(this.value[i] < other.value[i]) return -1;
         }
 
+        if(this.fractionPart > other.fractionPart) return 1;
+        else if(this.fractionPart > other.fractionPart) return -1;
+
         return 0;
     }
 
-    
+    private int GreaterThan(int other)
+    {
+        if( other < 0 ) return 1;
+        else if(other==0){
+            if(IsZero()) return 0;
+            else return 1;
+        }
+        
+        int cnt = (int)Math.Floor(Math.Log10(other) + 1);
+        int startIdx = getLengthOfValue();
+
+        if(startIdx > (cnt-1)/4) return 1;
+        else if(startIdx < (cnt-1)/4) return -1;
+
+        int i=startIdx;
+        while(i> 0 && other > 0){
+            if(this.value[i] > other / TENTHOUSAND) return 1;
+            else if(this.value[i] < other / TENTHOUSAND) return -1;
+
+            other -= (other/TENTHOUSAND) * TENTHOUSAND;
+            i--;
+        }
+
+        if(this.value[i] > other) return 1;
+        else if(this.value[i] < other) return -1;
+        else return 0;
+    }
     // =================================================================================================
 
 
@@ -298,9 +371,17 @@ public class BigNumber
     // Arithmetic Operator
 
     public static BigNumber operator +(BigNumber a, BigNumber b){
-        int regroup = 0; // ¹Ş¾Æ¿Ã¸²
+        int regroup = 0; // ë°›ì•„ì˜¬ë¦¼
 
         BigNumber c = new BigNumber(a);
+
+        if(b.fractionPart > 0){
+            c.fractionPart += b.fractionPart;
+            if(c.fractionPart > 1){
+                regroup = 1;
+                c.fractionPart -= 1;
+            }
+        }
 
         for (int i = 0; i < MAX; i++)
         {
@@ -317,7 +398,7 @@ public class BigNumber
                     break;
                 }
                 regroup = 1;
-                c.value[i] -= 10000;
+                c.value[i] -= TENTHOUSAND;
             }
             else
             {
@@ -328,37 +409,42 @@ public class BigNumber
         return c;
     }
 
-    // bignumber ÇÏ³ª ´õ »ı¼º ¾ÈÇÏ°í int ±×´ë·Î Ã³¸® °¡´ÉÇÏ°Ô ¼öÁ¤
+    
     public static BigNumber operator +(BigNumber a, int b){
-        int regroup = 0; // ¹Ş¾Æ¿Ã¸²
-
         BigNumber c = new BigNumber(a);
-        BigNumber tempB = new BigNumber(b);
-
-        for (int i = 0; i < MAX; i++)
-        {
-            if (tempB.value[i] == 0 && regroup == 0)
+        
+        int regroup = 0; // ë°›ì•„ì˜¬ë¦¼
+        int i = 0;
+        
+        while(i < MAX && (b > 0 || regroup > 0)){
+            
+            if (b%TENTHOUSAND != 0 || regroup != 0)
             {
-                continue;
+                c.value[i] += (b % TENTHOUSAND) + regroup;
+                if (c.value[i] > 9999)
+                {
+                    if(i==MAX-1){
+                        c.SetMaxValue();
+                        break;
+                    }
+                    regroup = 1;
+                    c.value[i] -= TENTHOUSAND;
+                }
+                else
+                {
+                    regroup = 0;
+                }
             }
 
-            c.value[i] += tempB.value[i] + regroup;
-            if (c.value[i] > 9999)
-            {
-                regroup = 1;
-                c.value[i] -= 10000;
-            }
-            else
-            {
-                regroup = 0;
-            }
+            b /= TENTHOUSAND;
+            i++;
         }
 
         return c;
     }
 
     public static BigNumber operator -(BigNumber a, BigNumber b){
-        int regroup = 0; // ¹Ş¾Æ³»¸²
+        int regroup = 0; // ë°›ì•„ë‚´ë¦¼
         // if minuend is zero
         if (a==0) return a;
 
@@ -374,6 +460,17 @@ public class BigNumber
             return c;
         }
 
+        if(b.fractionPart > 0){
+            
+            if(c.fractionPart < b.fractionPart){
+                c.fractionPart = 1 + c.fractionPart - b.fractionPart;
+                regroup = 1;
+            }
+            else{
+                c.fractionPart -= b.fractionPart;
+            }
+        }
+
         for (int i = 0; i < MAX; i++)
         {
             if (b.value[i] == 0 && regroup == 0)
@@ -383,7 +480,7 @@ public class BigNumber
 
             if (c.value[i] < b.value[i])
             {
-                c.value[i] = c.value[i] + 10000 - b.value[i] - regroup;
+                c.value[i] = c.value[i] + TENTHOUSAND - b.value[i] - regroup;
                 regroup = 1;
             }
             else
@@ -397,15 +494,16 @@ public class BigNumber
     }
 
     public static BigNumber operator -(BigNumber a, int b){
-        int regroup = 0; // ¹Ş¾Æ³»¸²
         // if minuend is zero
         if (a==0) return a;
 
         BigNumber c = new BigNumber(a);
-        BigNumber tempB = new BigNumber(b);
+        
+        int regroup = 0; // ë°›ì•„ë‚´ë¦¼
+        int idx = 0;
+
         // if minuend is less than subtrahend
-        if(c<tempB)
-        {
+        if(c < b){
             for(int i = 0; i < MAX; i++)
             {
                 c.value[i] = 0;
@@ -413,82 +511,191 @@ public class BigNumber
             return c;
         }
 
-        for (int i = 0; i < MAX; i++)
-        {
-            if (tempB.value[i] == 0 && regroup == 0)
-            {
-                continue;
-            }
+        while(idx < MAX && (b > 0 || regroup>0)){
+             int temp = b % TENTHOUSAND;
+             if(temp != 0 || regroup != 0){
+                 if(temp > c.value[idx]){
+                     c.value[idx] = c.value[idx] + TENTHOUSAND - temp - regroup;
+                     regroup = 1;
+                 }
+                 else{
+                     c.value[idx] = c.value[idx] - temp - regroup;
+                     regroup = 0;
+                 }
+             }
 
-            if (c.value[i] < tempB.value[i])
-            {
-                c.value[i] = c.value[i] + 10000 - tempB.value[i] - regroup;
-                regroup = 1;
-            }
-            else
-            {
-                c.value[i] = c.value[i]- tempB.value[i] - regroup;
-                regroup = 0;
-            }
+             b /= TENTHOUSAND;
+             idx++;
         }
-
         return c;
     }
 
+/*
     public static BigNumber operator *(BigNumber a, int b){
         if(b < 0) return null;
 
-        if(b==0) return new BigNumber(0);
+        BigNumber c = new BigNumber(0);
 
-        BigNumber c = new BigNumber(a);
-        int regroup = 0;
+        if(b==0) return c;
 
-        for (int i = 0; i < MAX; i++)
-        {
-            if (c.value[i] == 0 && regroup == 0)
-            {
-                continue;
-            }
+        List<int> listB = new List<int>(); // bë¥¼ ë„¤ìë¦¬ì”© ë¶„í• 
+        while(b>0){
+            listB.Add(b%TENTHOUSAND);
+            b/=TENTHOUSAND;
+        }
+        int endIdx = a.getLengthOfValue();
 
-            c.value[i] = c.value[i]*b + regroup;
-            if (c.value[i] > 9999)
-            {
-                if(i==MAX-1){
-                    c.SetMaxValue();
-                    break;
+        for(int idxOfListB=0;idxOfListB<listB.Count;idxOfListB++){
+            int partB = listB[idxOfListB];
+
+            BigNumber tempRes = new BigNumber(0);
+            int regroup = 0; // ë°›ì•„ì˜¬ë¦¼
+            int i = 0;
+            
+            while(i <= endIdx || regroup > 0){
+                if(i+idxOfListB >= MAX){
+                    tempRes.SetMaxValue();
+                    return tempRes;
                 }
 
-                regroup = c.value[i] / 10000;
-                c.value[i] %= 10000;
+                tempRes.value[i+idxOfListB] = a.value[i]*partB + regroup;
+                if (tempRes.value[i+idxOfListB] > 9999)
+                {
+                    if(i+idxOfListB==MAX-1){
+                        tempRes.SetMaxValue();
+                        return tempRes;
+                    }
+                    regroup = tempRes.value[i+idxOfListB] / TENTHOUSAND;
+                    tempRes.value[i+idxOfListB] %= TENTHOUSAND;
+                }
+                else
+                {
+                    regroup = 0;
+                }   
+                i++;
             }
-            else
-            {
-                regroup = 0;
-            }
+            c += tempRes;
         }
 
         return c;
     }
+*/
 
     public static BigNumber operator *(BigNumber a, float b){
-
         if(b < 0) return null;
 
-        if(Mathf.Abs(b)<float.Epsilon) return new BigNumber(0);
+        if(Mathf.Abs(b)<float.Epsilon) return Zero;
+        
+        List<int> listB = new List<int>(); // bë¥¼ ë„¤ìë¦¬ì”© ë¶„í• 
+        List<int> listA = new List<int>(); // aì˜ ìœ íš¨ìˆ«ìë¥¼ ë„¤ìë¦¬ì”© ë¶„í• 
+        string bToStr = CustomMath.getSignificantDigits(b);
 
-        BigNumber c = new BigNumber(a);
+        // a ìœ íš¨ìˆ«ì ì˜ë¼ë„£ê¸° 
+        if(!(Mathf.Abs(a.fractionPart)<float.Epsilon)){
+            // BigNumber aì— ì†Œìˆ˜ì  ê°’ì´ ìˆëŠ” ê²½ìš°
+            string aToStr = a.ToString().Remove(a.ToString().IndexOf("."),1);
+            while(aToStr.Length > 0){
+                int start = aToStr.Length - 4;
+                if (start < 0)
+                {
+                    start = 0;
+                }
 
-        // float À¯È¿¼ıÀÚ ºÎºĞÀÌ¶û BigNumber °öÇØÁÖ±â 
-        // BigNumber¿¡ fractionPart°¡ ÀÌ¹Ì ÀÖ´Â °æ¿ì °í·ÁÇØ¾ßµÊ
-        BigInteger res = BigInteger.Multiply(a.ToBigInteger(), CustomMath.getSignificantDigits(b));
-        string resToStr = res.ToString();
-        c.fractionPart = float.Parse("0." + resToStr.Substring(resToStr.Length - CustomMath.getNumOfSignificantDigits(b)));
-        resToStr = resToStr.Substring(0,resToStr.Length - CustomMath.getNumOfSignificantDigits(b));
+                string unit = aToStr.Substring(start);
+                listA.Add(int.Parse(unit));
+                aToStr = aToStr.Substring(0, aToStr.Length - unit.Length);
+            }
+        }
+        else{
+            foreach(int v in a.value){
+                listA.Add(v);
+            }
+        }
 
-        // string ³× ÀÚ¸®¾¿ Àß¶ó¼­ ³Ö¾îÁÖ±â
+        // b ìœ íš¨ìˆ«ì ì˜ë¼ë„£ê¸° 
+        while(bToStr.Length > 0){
+            int start = bToStr.Length - 4;
+            if (start < 0)
+            {
+                start = 0;
+            }
+
+            string unit = bToStr.Substring(start);
+            listB.Add(int.Parse(unit));
+            bToStr = bToStr.Substring(0, bToStr.Length - unit.Length);
+        }
+
+        int endIdx = listA.Count;
+        int tempArrCnt = listB.Count + listA.Count;
+        int[] res  = new int[tempArrCnt];
+ 
+
+        // ê³±í•˜ê¸° 
+        for(int idxOfListB=0;idxOfListB<listB.Count;idxOfListB++){
+            int partB = listB[idxOfListB];
+
+            int[] tempRes = new int[tempArrCnt];
+            int regroup = 0; // ë°›ì•„ì˜¬ë¦¼
+            int idxOfListA = 0;
+            
+            while(idxOfListA < listA.Count){
+                tempRes[idxOfListA+idxOfListB] = listA[idxOfListA]*partB + regroup;
+                
+                if (tempRes[idxOfListA+idxOfListB] > 9999)
+                {
+                    regroup = tempRes[idxOfListA+idxOfListB] / TENTHOUSAND; 
+                    tempRes[idxOfListA+idxOfListB] %= TENTHOUSAND;
+                }
+                else
+                {
+                    regroup = 0;
+                }   
+                idxOfListA++;
+            }
+
+            if(regroup!=0){
+                tempRes[idxOfListA+idxOfListB] += regroup;
+            }
+
+            regroup = 0;
+            for(int j=0;j<tempArrCnt;j++){
+                res[j] += tempRes[j] + regroup;
+                if(res[j]>9999){
+                    regroup = res[j]/TENTHOUSAND;
+                    res[j] %=TENTHOUSAND;
+                }
+                else{
+                    regroup = 0;
+                }
+            }
+        }
+        
+
+        string resToStr = "";
+        
+        Array.Reverse(res);
+        resToStr = string.Join("",res.Select(x=>x.ToString("D4")).ToArray());        
+        resToStr = resToStr.TrimStart('0');
+
+        if(resToStr.Equals("")) {
+            return Zero;
+        }
+
+        BigNumber c = new BigNumber();
+
+        int numOfFractionB = CustomMath.getNumOfSignificantDigits(b);
+        int numOfFractionA = CustomMath.getNumOfSignificantDigits(a.fractionPart);
+        if(resToStr.Length > (numOfFractionB+numOfFractionA)){
+            resToStr = resToStr.Insert(resToStr.Length - (numOfFractionB+numOfFractionA),".");
+        }
+        else{
+            resToStr = "0." + resToStr;
+        }
+        c.SetValue(resToStr);
 
         return c;
     }
+
 
     public static BigNumber operator *(BigNumber a, double b){
         return new BigNumber(0);
@@ -512,13 +719,13 @@ public class BigNumber
     }
 
     public static bool operator ==(BigNumber a, int b){
-        if(a.ToBigInteger() == b) return true;
+        if(a.GreaterThan(b) == 0) return true;
 
         return false;
     }
 
     public static bool operator !=(BigNumber a, int b){
-        if(a.ToBigInteger() == b) return false;
+        if(a.GreaterThan(b) == 0) return false;
 
         return true;
     }
@@ -526,26 +733,50 @@ public class BigNumber
 
 
     public static bool operator <(BigNumber a, BigNumber b){
-        if(a.greaterThan(b)!= -1) return false;
+        if(a.GreaterThan(b)!= -1) return false;
+        else return true; 
+    }
+
+    public static bool operator <(BigNumber a, int b){
+        if(a.GreaterThan(b)!= -1) return false;
         else return true; 
     }
 
     public static bool operator >(BigNumber a, BigNumber b){
-        if(a.greaterThan(b)!= 1) return false;
-        else return true; 
-    }
-    public static bool operator <=(BigNumber a, BigNumber b){
-        if(a.greaterThan(b)== 1) return false;
+        if(a.GreaterThan(b)!= 1) return false;
         else return true; 
     }
 
+    public static bool operator >(BigNumber a, int b){
+        if(a.GreaterThan(b)!= 1) return false;
+        else return true; 
+    }
+
+    public static bool operator <=(BigNumber a, BigNumber b){
+        if(a.GreaterThan(b)== 1) return false;
+        else return true; 
+    }
+
+    
+    public static bool operator <=(BigNumber a, int b){
+        if(a.GreaterThan(b)== 1) return false;
+        else return true; 
+    }
+
+
     public static bool operator >=(BigNumber a, BigNumber b){
-        if(a.greaterThan(b)== -1) return false;
+        if(a.GreaterThan(b)== -1) return false;
+        else return true; 
+    }
+
+    public static bool operator >=(BigNumber a, int b){
+        if(a.GreaterThan(b)== -1) return false;
         else return true; 
     }
     // -----------------------------------------------------------------------------------------------
 
 }
+
 
 public static class CustomMath{
     public static int getNumOfSignificantDigits(float f){
@@ -562,13 +793,47 @@ public static class CustomMath{
         return cnt;
     }
 
-    public static int getSignificantDigits(float f){
-        for(int i=0;i<getNumOfSignificantDigits(f);i++){
+    
+    public static int getNumOfSignificantDigits(double d){
+        int cnt = 0;
+        while(true){
+            int temp = (int)d;
+            if(d-temp<double.Epsilon){
+                break;
+            }
+            cnt++;
+            d *= 10;
+        }
+        
+        return cnt;
+    }
+
+    public static string getSignificantDigits(float f){
+        string res ="";
+
+        if(Mathf.Abs(f)<float.Epsilon) return res;
+        int loopCnt = getNumOfSignificantDigits(f);
+
+        for(int i=0;i<loopCnt;i++){
             f *= 10;
         }
 
-        return (int)f;
+        res = ((int)f).ToString("G");
+        return res;
     }
 
-}
 
+    public static string getSignificantDigits(double d){
+        string res ="";
+
+        if(Math.Abs(d)<double.Epsilon) return res;
+        int loopCnt = getNumOfSignificantDigits(d);
+
+        for(int i=0;i<loopCnt;i++){
+            d *= 10;
+        }
+
+        res = ((int)d).ToString("G");
+        return res;
+    }
+}
